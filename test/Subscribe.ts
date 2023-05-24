@@ -1,32 +1,35 @@
-import { ethers, upgrades } from "hardhat";
+import {ethers, upgrades} from "hardhat";
 import { expect } from "chai";
 import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
 
 describe("Subscription contract", function () {
-  async function deployToken() {
-    const Token = await ethers.getContractFactory("MyToken");
-    const token = await upgrades.deployProxy(Token);
-    await token.deployed();
-    return token;
-  }
-  async function deployMTNFixture() {
+
+  async function deployFixture() {
     // Contracts are deployed using the first signer/account by default
     const [owner, otherAccount] = await ethers.getSigners();
-    const admin = "0xBeFcc312CF77F7379B30aD939471DFCacB6e5EfE";
-    const Sub = await ethers.getContractFactory("Subscription");
-    const sub = await upgrades.deployProxy(Sub, { initializer: "initialize" });
+
+    // Token Contract
+    const Token = await ethers.getContractFactory("MyToken");
+    const token = await Token.deploy();
+
+    //Subscription Contract
+    const Sub = await ethers.getContractFactory("Subscribe");
+    const sub = await upgrades.deployProxy(Sub, [token.address], { initializer: "initialize" });
     await sub.deployed();
-    return { sub, owner, otherAccount };
+
+    return { sub, token, owner, otherAccount };
   }
 
-  it("should be deployed subscribe", async function () {
-    const { sub, owner } = await loadFixture(deployMTNFixture);
-    const admin = await sub.owner();
-    expect(admin).to.equal(owner.address);
+  it("should deploy subscribe", async function () {
+    const { sub, owner } = await loadFixture(deployFixture);
+    const ADMIN_ROLE = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('ADMIN_ROLE'))
+    const admin = await sub.hasRole(ADMIN_ROLE, owner.address);
+    expect(admin).to.equal(true);
   });
 
   it("should deploy mytoken", async function () {
-    const token = await deployToken();
-    const balance = await expect(admin).to.equal(owner.address);
+    const { token, owner } = await loadFixture(deployFixture);
+    const balance:any = await token.balanceOf(owner.address);
+    expect(balance/(10 ** 18)).to.equal(10000);
   });
 });
