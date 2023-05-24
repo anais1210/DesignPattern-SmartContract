@@ -70,7 +70,6 @@ describe("Subscription contract", async function () {
 
     await expect(token.transfer(sub.address, 1));
     await token.approve(sub.address, 1);
-    await expect(token.balanceOf(sub.address)).to.equal(1);
 
     const contractBalance = await token.balanceOf(sub.address);
     await expect(Number(contractBalance)).to.equal(1);
