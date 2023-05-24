@@ -104,6 +104,7 @@ describe("Subscription contract", async function () {
     const admin = await sub.hasRole(ADMIN_ROLE, owner.address);
     expect(admin).to.equal(true);
     const contractBalance = await token.balanceOf(sub.address);
+    const initialBalance = await token.balanceOf(owner.address);
     await expect(
       token.transfer(owner.address, contractBalance)
     ).to.changeTokenBalances(
@@ -111,5 +112,11 @@ describe("Subscription contract", async function () {
       [sub.address, owner.address],
       [0, contractBalance]
     );
+  });
+  it("Should revoke", async function () {
+    const { sub, otherAccount } = await loadFixture(deployFixture);
+    await expect(sub.hasRole("SUBSCRIBER_ROLE", otherAccount.address));
+    await sub.revoke(otherAccount.address);
+    await expect(sub.hasRole("", otherAccount.address));
   });
 });
