@@ -90,8 +90,9 @@ contract Subscribe is AccessControlUpgradeable{
         revokeRole(SUBSCRIBER_ROLE, account);
     }
 }
-contract MyToken is ERC20{
-    constructor() ERC20("MyToken", "MTK"){
-        _mint(msg.sender, 10000 * 10 ** decimals());
+contract MyToken is Context, ERC20{
+    constructor() public ERC20("MyToken", "MTK"){
+        _mint(msg.sender, 10000*10**decimals());
     }
+    
 }
