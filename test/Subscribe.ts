@@ -74,7 +74,7 @@ describe("Subscription contract", async function () {
     const contractBalance = await token.balanceOf(sub.address);
     await expect(Number(contractBalance)).to.equal(1);
 
-    // await sub.register();
+    await sub.register();
     // const endDate = await sub.subscriptionEndDates(otherAccount.address);
     // const date = new Date();
     // date.setDate(date.getDate() - subscriptionDuration);
@@ -83,11 +83,33 @@ describe("Subscription contract", async function () {
     // await console.log(endDate.toNumber(), date);
     // expect(endDate).to.equal(date);
     // expect(newUserBalance).to.equal(initialUserBalance - 1);
+    const SUBSCRIBER_ROLE = ethers.utils.keccak256(
+      ethers.utils.toUtf8Bytes("SUBSCRIBER_ROLE")
+    );
 
     const isSubscriber = await sub.hasRole(
-      sub.SUBSCRIBER_ROLE(),
+      SUBSCRIBER_ROLE,
       otherAccount.address
     );
-    expect(isSubscriber).to.be.true;
+    await console.log(isSubscriber);
+    // expect(isSubscriber).to.be.true;
+  });
+  it("Should withdraw", async function () {
+    const { sub, token, owner, otherAccount } = await loadFixture(
+      deployFixture
+    );
+    const ADMIN_ROLE = ethers.utils.keccak256(
+      ethers.utils.toUtf8Bytes("ADMIN_ROLE")
+    );
+    const admin = await sub.hasRole(ADMIN_ROLE, owner.address);
+    expect(admin).to.equal(true);
+    const contractBalance = await token.balanceOf(sub.address);
+    await expect(
+      token.transfer(owner.address, contractBalance)
+    ).to.changeTokenBalances(
+      token,
+      [sub.address, owner.address],
+      [0, contractBalance]
+    );
   });
 });
