@@ -46,54 +46,71 @@ contract Subscribe is AccessControlUpgradeable{
         _;
     }
 
+    /*
+    Fonction d'abonnement
+    */
     function register() public {
+        // Vérification que si l'abonné n'est pas déjà abonné
         require(subscriptionEndDates[msg.sender] < block.timestamp, "User is already subscribed");
+        //Vérification de la balance si l'utilisateur à assez de token pour payer son abonnement
         require(_token.balanceOf(msg.sender) >= subscriptionCost, "Not enough tokens");
 
+        // transfer du coût de l'abonnement en token (MTK) au smart contract
         _token.transferFrom(msg.sender, address(this), subscriptionCost);
 
+        // Attribuer le rôle d'abonné à l'utilisateur
         _grantRole(SUBSCRIBER_ROLE,msg.sender);
 
+        // Définir la date de fin d'abonnement --> 30 jours
         subscriptionEndDates[msg.sender] = block.timestamp + (subscriptionDuration * 30 days);
 
         emit SubscriptionRenewed(msg.sender, subscriptionEndDates[msg.sender]);
     }
 
     function isSubscribed(address user) public view returns(bool) {
+    // Vérification de si l'utilisateur est abonnée ou pas en vérfiant la date de fin d'abonnement
         return subscriptionEndDates[user] > block.timestamp;
     }
-
+    // Function de renouvellement d'abonnement
     function renew() public onlySubscribers{
+        //Vérification est abonné ou pas
         require(subscriptionEndDates[msg.sender] >= block.timestamp, "User is not subscribed");
+        // vérfie sa balance pour payer
         require(_token.balanceOf(msg.sender) >= subscriptionCost, "Not enough tokens");
+        //transfer le coût de l'abonnement avec notre token
         _token.transferFrom(msg.sender, address(this), subscriptionCost);
-
+        //Ajoute 30 jours en plus des jours qu'il a déjà selon sa date de fin d'abonnement
         subscriptionEndDates[msg.sender] += subscriptionDuration * 30 days;
 
         emit SubscriptionRenewed(msg.sender, subscriptionEndDates[msg.sender]);
     }
-
+    // Retire tous les tokens contenu dans le smart contract au owner
     function withdraw() public onlyAdmin{
         _token.transferFrom(address(this), msg.sender, _token.balanceOf(address(this)));
     }
-    
+    // Définir la durée d'un abonnement
     function setSubscriptionDuration(uint256 _subscriptionDuration) public onlyAdmin{
         subscriptionDuration = _subscriptionDuration;
     }
+    // Définir le coût d'un abonnement 
     function setSubscriptionCost(uint256 _subscriptionCost) public onlyAdmin{
         subscriptionCost = _subscriptionCost;
     }
+    // Récupérer la date de fin d'abonnement d'un utilisateur
     function getSubscriptionEndDates(address addr) public onlyAdmin view returns(uint256){
         return subscriptionEndDates[addr];
     }
+    // Vérifié le rôle pour un abonné 
     function access() public onlySubscribers view returns(string memory) {
         require(subscriptionEndDates[msg.sender] >= block.timestamp, "User is not subscribed");
         return "An amazing string!";
     }
+    // Enlever le rôle de "SUBSCRIBER_ROLE", possible que par l'admin
     function revoke(address account) public onlyAdmin{
         revokeRole(SUBSCRIBER_ROLE, account);
     }
 }
+// Simple contrat de création de 1000MTK
 contract MyToken is ERC20{
     constructor() ERC20("MyToken", "MTK"){
         _mint(msg.sender, 10000 * 10 ** decimals());
