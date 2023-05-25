@@ -24,16 +24,17 @@ describe("Subscription contract", async function () {
       }
     );
     await sub.deployed();
-
     return { sub, token, owner, otherAccount };
   }
 
   //Checking deployments
   it("Should deploy Subscribe", async function () {
     const { sub, owner } = await loadFixture(deployFixture);
+    // convertir string à un byte
     const ADMIN_ROLE = ethers.utils.keccak256(
       ethers.utils.toUtf8Bytes("ADMIN_ROLE")
     );
+    // attribution du rôle admin
     const admin = await sub.hasRole(ADMIN_ROLE, owner.address);
     expect(admin).to.equal(true);
   });
@@ -41,6 +42,7 @@ describe("Subscription contract", async function () {
   it("Should deploy MyToken", async function () {
     const { token, owner } = await loadFixture(deployFixture);
     const balance: any = await token.balanceOf(owner.address);
+    // deploiement avec le bon nombre de tokens 10000
     expect(balance / 10 ** 18).to.equal(10000);
   });
 
@@ -65,29 +67,31 @@ describe("Subscription contract", async function () {
   it("Should register new subscriber", async function () {
     const { sub, token, otherAccount } = await loadFixture(deployFixture);
 
+    //transferer token à otherAccount pour qu'il puisse payé avec notre token
     await token.transfer(otherAccount.address, 10000000);
     await token.connect(otherAccount).approve(sub.address, 10000000);
 
     await sub.connect(otherAccount).register();
-
+    // Convertir le string en byte
     const SUBSCRIBER_ROLE = ethers.utils.keccak256(
       ethers.utils.toUtf8Bytes("SUBSCRIBER_ROLE")
     );
-
+    // Attribution du rôle de "SUBSCRIBER" une fois le transfer approved
     const isSubscribed = await sub.hasRole(
       SUBSCRIBER_ROLE,
       otherAccount.address
     );
+    // Vérifie si il est bien abonné
     expect(isSubscribed).to.equal(true);
   });
 
   it("Should revert when a subscriber tries to register again", async function () {
     const { sub, token, otherAccount } = await loadFixture(deployFixture);
-
     await token.transfer(otherAccount.address, 10000000);
     await token.connect(otherAccount).approve(sub.address, 10000000);
 
     await sub.connect(otherAccount).register();
+
     await expect(sub.connect(otherAccount).register()).to.be.revertedWith(
       "User is already subscribed"
     );
@@ -109,15 +113,17 @@ describe("Subscription contract", async function () {
     await token.connect(otherAccount).approve(sub.address, 10000000);
 
     await sub.connect(otherAccount).register();
+    // récupère sa date de fin avant le renouvellement
     const endDateBefore = await sub.getSubscriptionEndDates(
       otherAccount.address
     );
-
+    // renouvelle son abonnement
     await sub.connect(otherAccount).renew();
+
+    // définis sa date de fin d'abonnement après le renouvellement
     const endDateAfter = await sub.getSubscriptionEndDates(
       otherAccount.address
     );
-
     // Because 30 days = 2592000 seconds
     expect(Number(endDateAfter)).to.be.equal(Number(endDateBefore) + 2592000);
   });
@@ -147,6 +153,8 @@ describe("Subscription contract", async function () {
   it("Should withdraw", async function () {
     const { sub, token, owner } = await loadFixture(deployFixture);
     const contractBalance = await token.balanceOf(sub.address);
+    // transfer contract --> owner et
+    // vérification des balances du owner et du contract après le transfer
     await expect(
       token.transfer(owner.address, contractBalance)
     ).to.changeTokenBalances(
@@ -165,15 +173,18 @@ describe("Subscription contract", async function () {
   });
 
   //Checking access method
+  // Vérifie le statue de SUBSCRIBER de l'utilisateur
   it("Should give access to subscriber", async function () {
     const { sub, token, otherAccount } = await loadFixture(deployFixture);
 
     await token.transfer(otherAccount.address, 10000000);
     await token.connect(otherAccount).approve(sub.address, 10000000);
 
+    // Register pour avoir le rôle de SUBSCRIBER
     await sub.connect(otherAccount).register();
-    const reward = await sub.connect(otherAccount).access();
 
+    // vérifie la string qui est définis dans le smart contract
+    const reward = await sub.connect(otherAccount).access();
     expect(reward).to.be.equal("An amazing string!");
   });
 
@@ -202,6 +213,7 @@ describe("Subscription contract", async function () {
       SUBSCRIBER_ROLE,
       otherAccount.address
     );
+    // vérifie que l'utilisateur n'est plus abonné => n'a plus le rôle
     expect(isSubscribed).to.equal(false);
   });
 
