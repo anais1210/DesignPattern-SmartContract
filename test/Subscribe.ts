@@ -75,6 +75,7 @@ describe("Subscription contract", async function () {
     await expect(Number(contractBalance)).to.equal(1);
 
     await sub.register();
+
     // const endDate = await sub.subscriptionEndDates(otherAccount.address);
     // const date = new Date();
     // date.setDate(date.getDate() - subscriptionDuration);
@@ -83,6 +84,7 @@ describe("Subscription contract", async function () {
     // await console.log(endDate.toNumber(), date);
     // expect(endDate).to.equal(date);
     // expect(newUserBalance).to.equal(initialUserBalance - 1);
+
     const SUBSCRIBER_ROLE = ethers.utils.keccak256(
       ethers.utils.toUtf8Bytes("SUBSCRIBER_ROLE")
     );
