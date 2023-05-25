@@ -1,15 +1,10 @@
 import { ethers, upgrades } from "hardhat";
 import { expect } from "chai";
 import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
-import { BigNumber } from "ethers";
 
 describe("Subscription contract", async function () {
-  const subscriptionCost = 1;
-  const subscriptionDuration = 30;
-  // Current date: September 29, 2022
-  //   const date = new Date();
-  //   date.setDate(date.getDate() - subscriptionDuration);
-
+  const duration = 1;
+  const price = 1;
   async function deployFixture() {
     // Contracts are deployed using the first signer/account by default
     const [owner, otherAccount] = await ethers.getSigners();
@@ -20,15 +15,16 @@ describe("Subscription contract", async function () {
 
     //Subscription Contract
     const Sub = await ethers.getContractFactory("Subscribe");
-    const sub = await upgrades.deployProxy(Sub, [token.address], {
+    const sub = await upgrades.deployProxy(Sub, [token.address, duration, price], {
       initializer: "initialize",
     });
     await sub.deployed();
 
     return { sub, token, owner, otherAccount };
   }
-  //   const { sub, token, owner, otherAccount } = await loadFixture(deployFixture);
 
+
+  //Checking deployments
   it("Should deploy Subscribe", async function () {
     const { sub, owner } = await loadFixture(deployFixture);
     const ADMIN_ROLE = ethers.utils.keccak256(
@@ -43,70 +39,118 @@ describe("Subscription contract", async function () {
     const balance: any = await token.balanceOf(owner.address);
     expect(balance / 10 ** 18).to.equal(10000);
   });
+
+
+  //Checking token transfer
   it("Should transfer tokens to accounts", async function () {
     const { token, owner, otherAccount } = await loadFixture(deployFixture);
     // Transfer 10 tokens from owner to otherAccount
     await expect(
       token.transfer(otherAccount.address, 10)
     ).to.changeTokenBalances(token, [owner, otherAccount], [-10, 10]);
-    const balance: any = await token.balanceOf(otherAccount.address);
-
-    await expect(balance).to.equal(10);
   });
+
+  it("Should revert transfer tokens if no balance", async function () {
+    const { token, owner, otherAccount } = await loadFixture(deployFixture);
+    // Transfer 10 tokens from otherAccount to owner
+    await expect(
+        token.connect(otherAccount).transfer(owner.address, 10)
+    ).to.be.revertedWith('ERC20: transfer amount exceeds balance');
+  });
+
+
+  //Checking register method
   it("Should register new subscriber", async function () {
-    const { sub, token, owner, otherAccount } = await loadFixture(
+    const { sub, token, otherAccount } = await loadFixture(
       deployFixture
     );
 
-    const initialEndDate = await sub.subscriptionEndDates(otherAccount.address);
-    const initialUserBalance = await token.balanceOf(otherAccount.address);
-    await console.log(Number(initialUserBalance));
+    await token.transfer(otherAccount.address, 10000000);
+    await token.connect(otherAccount).approve(sub.address, 10000000);
 
-    // await expect(token.transfer(sub.address, 1)).to.changeTokenBalances(
-    //   token,
-    //   [otherAccount, sub.address],
-    //   [Number(initialUserBalance) - 1, 1]
-    // );
-
-    await expect(token.transfer(sub.address, 1));
-    await token.approve(sub.address, 1);
-
-    const contractBalance = await token.balanceOf(sub.address);
-    await expect(Number(contractBalance)).to.equal(1);
-
-    await sub.register();
-
-    // const endDate = await sub.subscriptionEndDates(otherAccount.address);
-    // const date = new Date();
-    // date.setDate(date.getDate() - subscriptionDuration);
-    // const newEndDate = await sub.subscriptionEndDates(otherAccount.address);
-    // const newUserBalance = await token.balanceOf(otherAccount.address);
-    // await console.log(endDate.toNumber(), date);
-    // expect(endDate).to.equal(date);
-    // expect(newUserBalance).to.equal(initialUserBalance - 1);
+    await sub.connect(otherAccount).register();
 
     const SUBSCRIBER_ROLE = ethers.utils.keccak256(
       ethers.utils.toUtf8Bytes("SUBSCRIBER_ROLE")
     );
 
-    const isSubscriber = await sub.hasRole(
-      SUBSCRIBER_ROLE,
-      otherAccount.address
-    );
-    await console.log(isSubscriber);
-    // expect(isSubscriber).to.be.true;
+    const isSubscribed = await sub.hasRole(SUBSCRIBER_ROLE, otherAccount.address);
+    expect(isSubscribed).to.equal(true);
   });
+
+  it("Should revert when a subscriber tries to register again", async function () {
+    const { sub, token, otherAccount } = await loadFixture(
+        deployFixture
+    );
+
+    await token.transfer(otherAccount.address, 10000000);
+    await token.connect(otherAccount).approve(sub.address, 10000000);
+
+    await sub.connect(otherAccount).register();
+    await expect(sub.connect(otherAccount).register())
+        .to.be.revertedWith('User is already subscribed');
+
+  });
+
+  it("Should revert when insufficient balance", async function () {
+    const { sub, otherAccount } = await loadFixture(
+        deployFixture
+    );
+
+    await expect(sub.connect(otherAccount).register())
+        .to.be.revertedWith('Not enough tokens');
+  });
+
+
+  //Checking renew method
+  it("Should renew subscriber", async function () {
+    const { sub, token, otherAccount } = await loadFixture(
+        deployFixture
+    );
+
+    await token.transfer(otherAccount.address, 10000000);
+    await token.connect(otherAccount).approve(sub.address, 10000000);
+
+    await sub.connect(otherAccount).register();
+    const endDateBefore = await sub.getSubscriptionEndDates(otherAccount.address);
+
+    await sub.connect(otherAccount).renew();
+    const endDateAfter = await sub.getSubscriptionEndDates(otherAccount.address);
+
+    // Because 30 days = 2592000 seconds
+    expect(Number(endDateAfter)).to.be.equal(Number(endDateBefore) + 2592000);
+  });
+
+  it("Should revert when not subscriber tries to renew", async function () {
+    const { sub, otherAccount } = await loadFixture(
+        deployFixture
+    );
+
+    await expect(sub.connect(otherAccount).renew())
+        .to.be.revertedWith('Restricted to subscribers');
+  });
+
+  it("Should revert when subscriber has insufficient balance to renew", async function () {
+    const { sub, token, otherAccount } = await loadFixture(
+        deployFixture
+    );
+
+    await token.transfer(otherAccount.address, 1);
+    await token.connect(otherAccount).approve(sub.address, 1);
+
+    await sub.connect(otherAccount).register();
+
+    await expect(sub.connect(otherAccount).renew())
+        .to.be.revertedWith('Not enough tokens');
+  });
+
+
+  //Checking withdraw method
   it("Should withdraw", async function () {
-    const { sub, token, owner, otherAccount } = await loadFixture(
+    const { sub, token, owner } = await loadFixture(
       deployFixture
     );
-    const ADMIN_ROLE = ethers.utils.keccak256(
-      ethers.utils.toUtf8Bytes("ADMIN_ROLE")
-    );
-    const admin = await sub.hasRole(ADMIN_ROLE, owner.address);
-    expect(admin).to.equal(true);
     const contractBalance = await token.balanceOf(sub.address);
-    const initialBalance = await token.balanceOf(owner.address);
     await expect(
       token.transfer(owner.address, contractBalance)
     ).to.changeTokenBalances(
@@ -115,10 +159,67 @@ describe("Subscription contract", async function () {
       [0, contractBalance]
     );
   });
-  it("Should revoke", async function () {
-    const { sub, otherAccount } = await loadFixture(deployFixture);
-    await expect(sub.hasRole("SUBSCRIBER_ROLE", otherAccount.address));
+
+  it("Should revert when non-admin tries to withdraw", async function () {
+    const { sub, otherAccount } = await loadFixture(
+        deployFixture
+    );
+
+    await expect(sub.connect(otherAccount).withdraw())
+        .to.be.revertedWith('Restricted to admins');
+  });
+
+
+  //Checking access method
+  it("Should give access to subscriber", async function () {
+    const { sub, token, otherAccount } = await loadFixture(
+        deployFixture
+    );
+
+    await token.transfer(otherAccount.address, 10000000);
+    await token.connect(otherAccount).approve(sub.address, 10000000);
+
+    await sub.connect(otherAccount).register();
+    const reward = await sub.connect(otherAccount).access();
+
+    expect(reward).to.be.equal("An amazing string!");
+  });
+
+  it("Should revert access to non-subscriber", async function () {
+    const { sub, otherAccount } = await loadFixture(
+        deployFixture
+    );
+
+    await expect(sub.connect(otherAccount).access()).to.be.revertedWith("Restricted to subscribers");
+  });
+
+
+  //Checking revoke method
+  it("Should revoke subscriber", async function () {
+    const { sub, token, otherAccount } = await loadFixture(deployFixture);
+
+    await token.transfer(otherAccount.address, 10000000);
+    await token.connect(otherAccount).approve(sub.address, 10000000);
+
+    await sub.connect(otherAccount).register();
     await sub.revoke(otherAccount.address);
-    await expect(sub.hasRole("", otherAccount.address));
+
+    const SUBSCRIBER_ROLE = ethers.utils.keccak256(
+        ethers.utils.toUtf8Bytes("SUBSCRIBER_ROLE")
+    );
+    const isSubscribed = await sub.hasRole(SUBSCRIBER_ROLE, otherAccount.address);
+    expect(isSubscribed).to.equal(false);
+  });
+
+  it("Should not revoke if not admin", async function () {
+    const { sub, token, otherAccount } = await loadFixture(deployFixture);
+
+    await token.transfer(otherAccount.address, 10000000);
+    await token.connect(otherAccount).approve(sub.address, 10000000);
+
+    await sub.connect(otherAccount).register();
+    await expect(sub.connect(otherAccount).revoke(otherAccount.address))
+        .to.be.revertedWith('Restricted to admins');
+
   });
 });

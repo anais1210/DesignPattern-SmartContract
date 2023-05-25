@@ -19,16 +19,17 @@ contract Subscribe is AccessControlUpgradeable{
     mapping(address => uint256) public subscriptionEndDates;
     IERC20 private _token;
 
-    function initialize(IERC20 token) initializer public {
+    function initialize(IERC20 token, uint256 duration, uint256 price) initializer public {
 
         _token = token;
         __AccessControl_init();
         // Set up roles
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _setupRole(ADMIN_ROLE, msg.sender);
+        _setupRole(SUBSCRIBER_ROLE, msg.sender);
 
-        subscriptionDuration = 1; // 1 MONTH
-        subscriptionCost = 1; // 1 MATIC
+        subscriptionDuration = duration; // 1 MONTH
+        subscriptionCost = price; // 1 ETH
     }
 
     event SubscriptionRenewed(address indexed user, uint256 endDate);
@@ -47,11 +48,11 @@ contract Subscribe is AccessControlUpgradeable{
 
     function register() public {
         require(subscriptionEndDates[msg.sender] < block.timestamp, "User is already subscribed");
-        require(_token.balanceOf(msg.sender) > subscriptionCost, "Not enought token");
+        require(_token.balanceOf(msg.sender) >= subscriptionCost, "Not enough tokens");
 
         _token.transferFrom(msg.sender, address(this), subscriptionCost);
-    
-        _setupRole("SUBSCRIBER_ROLE",msg.sender);
+
+        _grantRole(SUBSCRIBER_ROLE,msg.sender);
 
         subscriptionEndDates[msg.sender] = block.timestamp + (subscriptionDuration * 30 days);
 
@@ -64,7 +65,7 @@ contract Subscribe is AccessControlUpgradeable{
 
     function renew() public onlySubscribers{
         require(subscriptionEndDates[msg.sender] >= block.timestamp, "User is not subscribed");
-        require(_token.balanceOf(msg.sender) > subscriptionCost, "Not enought token");
+        require(_token.balanceOf(msg.sender) >= subscriptionCost, "Not enough tokens");
         _token.transferFrom(msg.sender, address(this), subscriptionCost);
 
         subscriptionEndDates[msg.sender] += subscriptionDuration * 30 days;
@@ -82,6 +83,9 @@ contract Subscribe is AccessControlUpgradeable{
     function setSubscriptionCost(uint256 _subscriptionCost) public onlyAdmin{
         subscriptionCost = _subscriptionCost;
     }
+    function getSubscriptionEndDates(address addr) public onlyAdmin view returns(uint256){
+        return subscriptionEndDates[addr];
+    }
     function access() public onlySubscribers view returns(string memory) {
         require(subscriptionEndDates[msg.sender] >= block.timestamp, "User is not subscribed");
         return "An amazing string!";
@@ -90,9 +94,9 @@ contract Subscribe is AccessControlUpgradeable{
         revokeRole(SUBSCRIBER_ROLE, account);
     }
 }
-contract MyToken is Context, ERC20{
-    constructor() public ERC20("MyToken", "MTK"){
-        _mint(msg.sender, 10000*10**decimals());
+contract MyToken is ERC20{
+    constructor() ERC20("MyToken", "MTK"){
+        _mint(msg.sender, 10000 * 10 ** decimals());
     }
     
 }
